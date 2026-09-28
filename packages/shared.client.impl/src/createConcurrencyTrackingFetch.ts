@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-export const OSDK_CLIENT_CONCURRENCY_HEADER = "X-OSDK-Client-Concurrency";
+export const OSDK_REQUEST_CONTEXT_HEADER = "X-OSDK-Request-Context";
 
 export function createConcurrencyTrackingFetch(
   fetchFn: typeof globalThis.fetch,
@@ -33,7 +33,12 @@ export function createConcurrencyTrackingFetch(
 
     activeHttpAttempts++;
     try {
-      headers.set(OSDK_CLIENT_CONCURRENCY_HEADER, String(activeHttpAttempts));
+      headers.set(
+        OSDK_REQUEST_CONTEXT_HEADER,
+        JSON.stringify({
+          clientMetrics: { concurrency: activeHttpAttempts },
+        }),
+      );
       return await fetchFn(input, { ...init, headers });
     } finally {
       activeHttpAttempts--;
