@@ -16,6 +16,44 @@
 
 export const OSDK_REQUEST_CONTEXT_HEADER = "X-OSDK-Request-Context";
 
+function requestContextWithConcurrency(
+  requestContextHeader: string | null,
+  concurrency: number,
+): string {
+  let requestContext: Record<string, unknown> = {};
+
+  if (requestContextHeader != null) {
+    try {
+      const parsedRequestContext: unknown = JSON.parse(requestContextHeader);
+      if (
+        typeof parsedRequestContext === "object" &&
+        parsedRequestContext != null &&
+        !Array.isArray(parsedRequestContext)
+      ) {
+        requestContext = parsedRequestContext as Record<string, unknown>;
+      }
+    } catch {
+      // Ignore malformed request context headers.
+    }
+  }
+
+  const existingClientMetrics = requestContext.clientMetrics;
+  const clientMetrics =
+    typeof existingClientMetrics === "object" &&
+    existingClientMetrics != null &&
+    !Array.isArray(existingClientMetrics)
+      ? (existingClientMetrics as Record<string, unknown>)
+      : {};
+
+  return JSON.stringify({
+    ...requestContext,
+    clientMetrics: {
+      ...clientMetrics,
+      concurrency,
+    },
+  });
+}
+
 export function createConcurrencyTrackingFetch(
   fetchFn: typeof globalThis.fetch,
 ): typeof globalThis.fetch {
@@ -35,9 +73,10 @@ export function createConcurrencyTrackingFetch(
     try {
       headers.set(
         OSDK_REQUEST_CONTEXT_HEADER,
-        JSON.stringify({
-          clientMetrics: { concurrency: activeHttpAttempts },
-        }),
+        requestContextWithConcurrency(
+          headers.get(OSDK_REQUEST_CONTEXT_HEADER),
+          activeHttpAttempts,
+        ),
       );
       return await fetchFn(input, { ...init, headers });
     } finally {
